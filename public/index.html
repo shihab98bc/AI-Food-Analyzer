@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Food Log (Concept)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .food-item-card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .food-item-card:hover {
+            transform: translateY(-4px);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #cameraView { /* Default no mirror, will be set if front camera is used */ }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4 selection:bg-sky-500 selection:text-white">
+
+    <div class="w-full max-w-4xl bg-slate-800 shadow-2xl rounded-xl p-6 md:p-10">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-sky-400">AI Food Analyzer</h1>
+            <p class="text-slate-400 mt-2">Use your camera or upload a picture of your meal for AI analysis.</p>
+            <p class="text-xs text-slate-500 mt-1">(This is a concept demo. AI analysis is for illustrative purposes only.)</p>
+        </header>
+
+        <div class="grid md:grid-cols-2 gap-8 items-start">
+            <div class="bg-slate-700 p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-sky-300">1. Provide Your Meal Image</h2>
+                
+                <div id="cameraSection">
+                    <button id="openCameraButton" class="w-full mb-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-transform duration-150 ease-in-out active:scale-95 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h1.586A2 2 0 017.001 4L8.415 6H14a2 2 0 012 2v1.586A2 2 0 0116 11.001L14 12.415V18a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm2-2a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V9.414l1.293 1.293a1 1 0 001.414-1.414L13.414 8H14a1 1 0 001-1V6a1 1 0 00-1-1H8.414l-1-1H4z"/><path d="M8 11a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>
+                        Use Camera
+                    </button>
+                    <div id="cameraFeedContainer" class="hidden mt-4 w-full h-64 bg-slate-600 rounded-lg flex flex-col items-center justify-center overflow-hidden relative">
+                        <video id="cameraView" autoplay playsinline class="w-full h-full object-cover"></video>
+                        <button id="captureImageButton" class="hidden absolute bottom-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full shadow-lg">Capture</button>
+                    </div>
+                    <canvas id="photoCanvas" class="hidden"></canvas>
+                </div>
+                
+                <p class="text-center text-slate-400 my-3 text-sm">OR</p>
+
+                <div id="uploadSection">
+                     <label for="imageUpload" class="block text-sm font-medium text-slate-300 mb-1">Upload an image file:</label>
+                    <input type="file" id="imageUpload" accept="image/*" class="block w-full text-sm text-slate-300
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-lg file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-sky-500 file:text-white
+                        hover:file:bg-sky-600 cursor-pointer transition-all duration-200 ease-in-out">
+                </div>
+                
+                <div id="imagePreviewContainer" class="mt-4 w-full h-64 bg-slate-600 rounded-lg flex items-center justify-center overflow-hidden">
+                    <img id="imagePreview" src="#" alt="Image Preview" class="hidden max-w-full max-h-full object-contain rounded-md">
+                    <p id="previewPlaceholder" class="text-slate-400">Image preview will appear here</p>
+                </div>
+
+                <button id="analyzeButton" class="mt-6 w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-transform duration-150 ease-in-out active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7 2a1 1 0 00-.707 1.707L8.586 6H6a1 1 0 00-1 1v6a1 1 0 001 1h2.586l-2.293 2.293A1 1 0 107.707 18L14.414 11l-6.707-7zM12 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>
+                    Analyze Food
+                </button>
+            </div>
+
+            <div class="bg-slate-700 p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-sky-300">2. AI Analysis</h2>
+                <div id="loadingIndicator" class="hidden flex flex-col items-center justify-center my-4">
+                    <div class="spinner"></div>
+                    <p class="text-slate-400 mt-2">Analyzing your food... Please wait.</p>
+                </div>
+                <div id="errorMessage" class="hidden bg-red-500/20 text-red-300 p-3 rounded-md mb-4"></div>
+                <div id="analysisResult" class="space-y-3">
+                    <p id="analysisPlaceholder" class="text-slate-400">Analysis results will appear here.</p>
+                </div>
+                 <button id="logButton" class="hidden mt-6 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-transform duration-150 ease-in-out active:scale-95">
+                    Log These Items
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-10 bg-slate-700 p-6 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-semibold mb-4 text-sky-300">3. Today's Log (In-Memory)</h2>
+            <div id="loggedItemsContainer" class="space-y-2">
+                <p id="logPlaceholder" class="text-slate-400">No items logged yet.</p>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-600">
+                <p class="text-xl font-semibold text-right">Total Estimated Calories: <span id="totalCalories" class="text-green-400">0</span> kcal</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const analysisResult = document.getElementById('analysisResult');
+        const analysisPlaceholder = document.getElementById('analysisPlaceholder');
+        const errorMessage = document.getElementById('errorMessage');
+        const logButton = document.getElementById('logButton');
+        const loggedItemsContainer = document.getElementById('loggedItemsContainer');
+        const logPlaceholder = document.getElementById('logPlaceholder');
+        const totalCaloriesElement = document.getElementById('totalCalories');
+
+        const openCameraButton = document.getElementById('openCameraButton');
+        const cameraFeedContainer = document.getElementById('cameraFeedContainer');
+        const cameraView = document.getElementById('cameraView');
+        const captureImageButton = document.getElementById('captureImageButton');
+        const photoCanvas = document.getElementById('photoCanvas');
+        let stream = null;
+
+        let currentAnalysisData = [];
+        let loggedItems = [];
+        let totalCalories = 0;
+        let imageBase64 = null;
+
+        function resetImageState() {
+            imagePreview.classList.add('hidden');
+            previewPlaceholder.classList.remove('hidden');
+            analyzeButton.disabled = true;
+            imageBase64 = null;
+            analysisResult.innerHTML = ''; 
+            analysisPlaceholder.classList.remove('hidden'); 
+            if (!analysisResult.contains(analysisPlaceholder)) { 
+                 analysisResult.appendChild(analysisPlaceholder);
+                 analysisResult.querySelector('p').textContent = 'Analysis results will appear here.'; // Reset placeholder text
+            }
+            logButton.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            cameraFeedContainer.classList.add('hidden');
+            captureImageButton.classList.add('hidden');
+            cameraView.style.transform = 'none';
+        }
+        
+        openCameraButton.addEventListener('click', async () => {
+            resetImageState(); 
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                cameraView.style.transform = 'none';
+            } catch (err) {
+                console.warn("Could not get rear camera, trying front camera:", err);
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                    cameraView.style.transform = 'scaleX(-1)';
+                } catch (errUser) {
+                    console.error("Error accessing any camera: ", errUser);
+                    showError("Could not access camera. Please ensure permissions are granted. Error: " + errUser.message);
+                    return;
+                }
+            }
+            cameraView.srcObject = stream;
+            cameraFeedContainer.classList.remove('hidden');
+            captureImageButton.classList.remove('hidden');
+            previewPlaceholder.classList.add('hidden'); 
+            imagePreview.classList.add('hidden'); 
+        });
+
+        captureImageButton.addEventListener('click', () => {
+            if (!stream) return;
+            const context = photoCanvas.getContext('2d');
+            photoCanvas.width = cameraView.videoWidth;
+            photoCanvas.height = cameraView.videoHeight;
+            if (cameraView.style.transform === 'scaleX(-1)') { // Mirrored (front camera)
+                context.translate(photoCanvas.width, 0);
+                context.scale(-1, 1);
+                context.drawImage(cameraView, 0, 0, photoCanvas.width, photoCanvas.height);
+                context.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+            } else { // Not mirrored (rear camera)
+                context.drawImage(cameraView, 0, 0, photoCanvas.width, photoCanvas.height);
+            }
+            const dataUrl = photoCanvas.toDataURL('image/jpeg');
+            imagePreview.src = dataUrl;
+            imageBase64 = dataUrl.split(',')[1];
+            imagePreview.classList.remove('hidden');
+            previewPlaceholder.classList.add('hidden');
+            analyzeButton.disabled = false;
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            cameraFeedContainer.classList.add('hidden');
+            captureImageButton.classList.add('hidden');
+        });
+
+        imageUpload.addEventListener('change', function(event) {
+            resetImageState(); 
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imageBase64 = e.target.result.split(',')[1]; 
+                    imagePreview.classList.remove('hidden');
+                    previewPlaceholder.classList.add('hidden');
+                    analyzeButton.disabled = false;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        analyzeButton.addEventListener('click', async function() {
+            if (!imageBase64) {
+                showError("Please provide an image first (via camera or upload).");
+                return;
+            }
+            loadingIndicator.classList.remove('hidden');
+            analysisResult.innerHTML = ''; 
+            analysisPlaceholder.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            analyzeButton.disabled = true;
+            logButton.classList.add('hidden');
+
+            try {
+                // API Key is no longer here. Request goes to our own backend.
+                const response = await fetch('/api/analyze-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageBase64: imageBase64 }),
+                });
+
+                if (!response.ok) {
+                    let errorMsg = `Server responded with status: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        // If response is not JSON, use the status text
+                        errorMsg = response.statusText || errorMsg;
+                    }
+                    throw new Error(errorMsg);
+                }
+                
+                // Server sends the analysis JSON string directly
+                const analysisDataJsonString = await response.text(); // Get raw text
+                try {
+                    currentAnalysisData = JSON.parse(analysisDataJsonString); // Parse JSON on client
+                } catch (parseError) {
+                     console.error("Client: JSON parsing error from server response:", parseError, "Raw text:", analysisDataJsonString);
+                     throw new Error("Received malformed analysis data from server. Please check server logs.");
+                }
+
+                if (currentAnalysisData && currentAnalysisData.length > 0) {
+                    displayAnalysis(currentAnalysisData);
+                    logButton.classList.remove('hidden');
+                } else {
+                    analysisResult.innerHTML = '<p class="text-slate-400">AI could not identify specific food items or calories. Try a clearer image or a different meal.</p>';
+                }
+            } catch (error) {
+                console.error("Client: Analysis error:", error);
+                showError(`Analysis failed: ${error.message}`);
+                if (!analysisResult.querySelector('p')) { 
+                    analysisResult.innerHTML = `<p class="text-red-400">Could not analyze image. ${error.message}</p>`;
+                }
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                analyzeButton.disabled = false; 
+            }
+        });
+
+        function displayAnalysis(data) {
+            analysisResult.innerHTML = ''; 
+            if (!data || data.length === 0) {
+                analysisPlaceholder.classList.remove('hidden');
+                 if (!analysisResult.contains(analysisPlaceholder)) {
+                    analysisResult.appendChild(analysisPlaceholder);
+                }
+                return;
+            }
+            analysisPlaceholder.classList.add('hidden');
+            data.forEach(item => {
+                const foodItemDiv = document.createElement('div');
+                foodItemDiv.className = 'food-item-card bg-slate-600 p-4 rounded-lg shadow flex justify-between items-center';
+                const itemName = document.createElement('span');
+                itemName.className = 'text-slate-100 font-medium';
+                itemName.textContent = item.foodItem || 'Unknown Item';
+                const itemCalories = document.createElement('span');
+                itemCalories.className = 'text-green-400 font-semibold';
+                itemCalories.textContent = `${item.estimatedCalories || 0} kcal`;
+                foodItemDiv.appendChild(itemName);
+                foodItemDiv.appendChild(itemCalories);
+                analysisResult.appendChild(foodItemDiv);
+            });
+        }
+
+        logButton.addEventListener('click', function() {
+            if (currentAnalysisData && currentAnalysisData.length > 0) {
+                currentAnalysisData.forEach(item => {
+                    loggedItems.push(item);
+                    totalCalories += (item.estimatedCalories || 0);
+                });
+                updateLoggedItemsDisplay();
+                currentAnalysisData = []; 
+                logButton.classList.add('hidden');
+                analysisResult.innerHTML = ''; 
+                analysisPlaceholder.classList.remove('hidden'); 
+                if (!analysisResult.contains(analysisPlaceholder)) {
+                    analysisResult.appendChild(analysisPlaceholder);
+                }
+                analysisResult.querySelector('p').textContent = 'Items logged! Provide a new image to analyze more food.';
+            }
+        });
+
+        function updateLoggedItemsDisplay() {
+            loggedItemsContainer.innerHTML = ''; 
+            if (loggedItems.length === 0) {
+                logPlaceholder.classList.remove('hidden');
+                if (!loggedItemsContainer.contains(logPlaceholder)) {
+                     loggedItemsContainer.appendChild(logPlaceholder);
+                }
+            } else {
+                logPlaceholder.classList.add('hidden');
+                loggedItems.forEach((item) => {
+                    const loggedItemDiv = document.createElement('div');
+                    loggedItemDiv.className = 'bg-slate-600 p-3 rounded-md flex justify-between items-center text-sm';
+                    const itemName = document.createElement('span');
+                    itemName.className = 'text-slate-200';
+                    itemName.textContent = item.foodItem || 'Unknown Item';
+                    const itemCalories = document.createElement('span');
+                    itemCalories.className = 'text-green-300';
+                    itemCalories.textContent = `${item.estimatedCalories || 0} kcal`;
+                    loggedItemDiv.appendChild(itemName);
+                    loggedItemDiv.appendChild(itemCalories);
+                    loggedItemsContainer.appendChild(loggedItemDiv);
+                });
+            }
+            totalCaloriesElement.textContent = totalCalories;
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        // Initial UI setup
+        updateLoggedItemsDisplay();
+        analysisPlaceholder.classList.remove('hidden');
+        logPlaceholder.classList.remove('hidden');
+        if (analysisResult && !analysisResult.contains(analysisPlaceholder)) {
+             analysisResult.appendChild(analysisPlaceholder);
+        }
+         if (loggedItemsContainer && !loggedItemsContainer.contains(logPlaceholder)) {
+             loggedItemsContainer.appendChild(logPlaceholder);
+        }
+
+    </script>
+</body>
+</html>

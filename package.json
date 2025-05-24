@@ -1,0 +1,28 @@
+{
+  "name": "ai-food-analyzer",
+  "version": "1.0.0",
+  "description": "AI Food Analyzer with secure API key handling",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "ai",
+    "food",
+    "analyzer",
+    "gemini",
+    "express",
+    "nodejs"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
