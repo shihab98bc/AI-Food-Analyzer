@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Food Log (Concept)</title>
+    <title>AI Food Log (Vercel)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -121,6 +121,8 @@
     </div>
 
     <script>
+        // All JavaScript code is identical to the previous 'public/index.html'
+        // where it calls '/api/analyze-image'. No changes needed here for Vercel config.
         const imageUpload = document.getElementById('imageUpload');
         const imagePreview = document.getElementById('imagePreview');
         const imagePreviewContainer = document.getElementById('imagePreviewContainer');
@@ -156,7 +158,7 @@
             analysisPlaceholder.classList.remove('hidden'); 
             if (!analysisResult.contains(analysisPlaceholder)) { 
                  analysisResult.appendChild(analysisPlaceholder);
-                 analysisResult.querySelector('p').textContent = 'Analysis results will appear here.'; // Reset placeholder text
+                 analysisResult.querySelector('p').textContent = 'Analysis results will appear here.';
             }
             logButton.classList.add('hidden');
             errorMessage.classList.add('hidden');
@@ -197,12 +199,12 @@
             const context = photoCanvas.getContext('2d');
             photoCanvas.width = cameraView.videoWidth;
             photoCanvas.height = cameraView.videoHeight;
-            if (cameraView.style.transform === 'scaleX(-1)') { // Mirrored (front camera)
+            if (cameraView.style.transform === 'scaleX(-1)') {
                 context.translate(photoCanvas.width, 0);
                 context.scale(-1, 1);
                 context.drawImage(cameraView, 0, 0, photoCanvas.width, photoCanvas.height);
-                context.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-            } else { // Not mirrored (rear camera)
+                context.setTransform(1, 0, 0, 1, 0, 0);
+            } else {
                 context.drawImage(cameraView, 0, 0, photoCanvas.width, photoCanvas.height);
             }
             const dataUrl = photoCanvas.toDataURL('image/jpeg');
@@ -246,8 +248,7 @@
             logButton.classList.add('hidden');
 
             try {
-                // API Key is no longer here. Request goes to our own backend.
-                const response = await fetch('/api/analyze-image', {
+                const response = await fetch('/api/analyze-image', { // Calls your backend
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ imageBase64: imageBase64 }),
@@ -259,16 +260,14 @@
                         const errorData = await response.json();
                         errorMsg = errorData.error || errorMsg;
                     } catch (e) {
-                        // If response is not JSON, use the status text
                         errorMsg = response.statusText || errorMsg;
                     }
                     throw new Error(errorMsg);
                 }
                 
-                // Server sends the analysis JSON string directly
-                const analysisDataJsonString = await response.text(); // Get raw text
+                const analysisDataJsonString = await response.text();
                 try {
-                    currentAnalysisData = JSON.parse(analysisDataJsonString); // Parse JSON on client
+                    currentAnalysisData = JSON.parse(analysisDataJsonString);
                 } catch (parseError) {
                      console.error("Client: JSON parsing error from server response:", parseError, "Raw text:", analysisDataJsonString);
                      throw new Error("Received malformed analysis data from server. Please check server logs.");
@@ -366,7 +365,6 @@
             errorMessage.classList.remove('hidden');
         }
 
-        // Initial UI setup
         updateLoggedItemsDisplay();
         analysisPlaceholder.classList.remove('hidden');
         logPlaceholder.classList.remove('hidden');
@@ -376,7 +374,6 @@
          if (loggedItemsContainer && !loggedItemsContainer.contains(logPlaceholder)) {
              loggedItemsContainer.appendChild(logPlaceholder);
         }
-
     </script>
 </body>
 </html>

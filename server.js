@@ -4,11 +4,15 @@ const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
+// Vercel injects its own PORT environment variable.
+// Use it if available, otherwise default for local development.
 const PORT = process.env.PORT || 3000; 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Middleware
 app.use(express.json({ limit: '10mb' })); 
+// Serve static files from the 'public' directory
+// This is important for Vercel when server.js handles all routes
 app.use(express.static(path.join(__dirname, 'public'))); 
 
 // API endpoint to handle image analysis
@@ -16,7 +20,7 @@ app.post('/api/analyze-image', async (req, res) => {
     const { imageBase64 } = req.body;
 
     if (!GEMINI_API_KEY) {
-        console.error('Error: GEMINI_API_KEY is not defined in .env file.');
+        console.error('Error: GEMINI_API_KEY is not defined. Check Vercel environment variables.');
         return res.status(500).json({ error: 'Server configuration error: API key missing.' });
     }
 
@@ -25,7 +29,6 @@ app.post('/api/analyze-image', async (req, res) => {
     }
 
     try {
-        // Step 1: Get image description from Gemini (Server-side)
         const imageDescriptionPrompt = "Describe the food items visible in this image in detail. Focus on identifiable ingredients and dishes.";
         const descriptionPayload = {
             contents: [{
@@ -47,7 +50,7 @@ app.post('/api/analyze-image', async (req, res) => {
 
         if (!descriptionResponse.ok) {
             const errorData = await descriptionResponse.json();
-            console.error('Server: Error from Gemini (description):', errorData);
+            console.error('Server: Error from Gemini (description):', errorData.error ? errorData.error.message : descriptionResponse.statusText);
             return res.status(descriptionResponse.status).json({ error: `Error describing image: ${errorData.error?.message || descriptionResponse.statusText}` });
         }
 
@@ -60,7 +63,6 @@ app.post('/api/analyze-image', async (req, res) => {
         }
         console.log('Server: Received food description (first 100 chars):', foodDescription.substring(0, 100) + '...');
 
-        // Step 2: Get structured food/calorie data from the description (Server-side)
         const nutritionAnalysisPrompt = `Based on the following food description, identify distinct food items and estimate their calorie content.
         Description: "${foodDescription}"
         Provide your response as a JSON array of objects, where each object has "foodItem" (string) and "estimatedCalories" (number, integer) properties.
@@ -96,7 +98,7 @@ app.post('/api/analyze-image', async (req, res) => {
 
         if (!nutritionResponse.ok) {
             const errorData = await nutritionResponse.json();
-            console.error('Server: Error from Gemini (nutrition):', errorData);
+            console.error('Server: Error from Gemini (nutrition):', errorData.error ? errorData.error.message : nutritionResponse.statusText);
             return res.status(nutritionResponse.status).json({ error: `Error analyzing nutrition: ${errorData.error?.message || nutritionResponse.statusText}` });
         }
         
@@ -113,27 +115,43 @@ app.post('/api/analyze-image', async (req, res) => {
         res.send(analysisJsonString); 
 
     } catch (error) {
-        console.error("Server-side analysis error:", error);
+        console.error("Server-side analysis error:", error.message);
         res.status(500).json({ error: 'An internal server error occurred during analysis.' });
     }
 });
 
-// Serve the main HTML file for the root route
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`AI Food Analyzer server running on http://localhost:${PORT}`);
-    if (!GEMINI_API_KEY) {
-        console.warn('--------------------------------------------------------------------');
-        console.warn('Warning: GEMINI_API_KEY is not set in your .env file!');
-        console.warn('The application will not be able to connect to the Gemini API.');
-        console.warn('Please create a .env file with your GEMINI_API_KEY.');
-        console.warn('Example .env file contents:');
-        console.warn('GEMINI_API_KEY=your_actual_api_key_here');
-        console.warn('PORT=3000');
-        console.warn('--------------------------------------------------------------------');
+// Serve the main HTML file for all other GET requests (SPA-like behavior)
+// This is crucial for Vercel when server.js handles all routes
+// Ensure this is AFTER your API routes
+app.get('*', (req, res) => {
+    // Check if the request is for an API endpoint, if so, it should have been handled above
+    // This is a fallback for serving the index.html for frontend routing, if any.
+    if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    } else {
+        // If it's an unhandled API route, send a 404
+        res.status(404).send('API route not found');
     }
 });
+
+
+// Only start listening if the GEMINI_API_KEY is available (for local dev)
+// Vercel will manage the server lifecycle itself.
+if (require.main === module && GEMINI_API_KEY) {
+    app.listen(PORT, () => {
+        console.log(`AI Food Analyzer server running locally on http://localhost:${PORT}`);
+    });
+} else if (require.main === module && !GEMINI_API_KEY) {
+    console.warn('--------------------------------------------------------------------');
+    console.warn('Warning: GEMINI_API_KEY is not set in your .env file for local development!');
+    console.warn('The application will not be able to connect to the Gemini API locally.');
+    console.warn('Please create a .env file with your GEMINI_API_KEY.');
+    console.warn('Example .env file contents:');
+    console.warn('GEMINI_API_KEY=your_actual_api_key_here');
+    console.warn('PORT=3000');
+    console.warn('--------------------------------------------------------------------');
+    console.log('Server not started due to missing API key for local development.');
+}
+
+// Export the app for Vercel's serverless environment
+module.exports = app;
