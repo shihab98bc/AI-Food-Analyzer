@@ -43,6 +43,32 @@
             100% { transform: rotate(360deg); }
         }
         #cameraView { /* Default no mirror, will be set if front camera is used */ }
+        .meal-name-title {
+            font-size: 1.25rem; 
+            font-weight: 600; 
+            color: #93c5fd; 
+            margin-bottom: 0.75rem; 
+            text-align: center;
+            border-bottom: 1px solid #4b5563; 
+            padding-bottom: 0.5rem; 
+        }
+        .recipe-section {
+            margin-top: 1rem; /* Tailwind: mt-4 */
+            padding-top: 1rem; /* Tailwind: pt-4 */
+            border-top: 1px solid #4b5563; /* Tailwind: border-slate-600 */
+        }
+        .recipe-title {
+            font-size: 1.125rem; /* Tailwind: text-lg */
+            font-weight: 600; /* Tailwind: font-semibold */
+            color: #60a5fa; /* Tailwind: text-blue-400 */
+            margin-bottom: 0.5rem; /* Tailwind: mb-2 */
+        }
+        .recipe-steps {
+            font-size: 0.875rem; /* Tailwind: text-sm */
+            color: #d1d5db; /* Tailwind: text-slate-300 */
+            white-space: pre-wrap; /* Preserve line breaks from AI */
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4 selection:bg-sky-500 selection:text-white">
@@ -100,8 +126,14 @@
                     <p class="text-slate-400 mt-2">Analyzing your food... Please wait.</p>
                 </div>
                 <div id="errorMessage" class="hidden bg-red-500/20 text-red-300 p-3 rounded-md mb-4"></div>
-                <div id="analysisResult" class="space-y-3">
-                    <p id="analysisPlaceholder" class="text-slate-400">Analysis results will appear here.</p>
+                <div id="analysisResultContainer"> 
+                    <div id="foodItemsList" class="space-y-3"> 
+                         <p id="analysisPlaceholder" class="text-slate-400">Analysis results will appear here.</p>
+                    </div>
+                    <div id="recipeStepsContainer" class="hidden recipe-section">
+                        <h4 class="recipe-title">Preparation / Recipe:</h4>
+                        <p class="recipe-steps"></p>
+                    </div>
                 </div>
                  <button id="logButton" class="hidden mt-6 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-transform duration-150 ease-in-out active:scale-95">
                     Log These Items
@@ -121,16 +153,20 @@
     </div>
 
     <script>
-        // All JavaScript code is identical to the previous 'public/index.html'
-        // where it calls '/api/analyze-image'. No changes needed here for Vercel config.
         const imageUpload = document.getElementById('imageUpload');
         const imagePreview = document.getElementById('imagePreview');
         const imagePreviewContainer = document.getElementById('imagePreviewContainer');
         const previewPlaceholder = document.getElementById('previewPlaceholder');
         const analyzeButton = document.getElementById('analyzeButton');
         const loadingIndicator = document.getElementById('loadingIndicator');
-        const analysisResult = document.getElementById('analysisResult');
+        
+        const analysisResultMainContainer = document.getElementById('analysisResultContainer'); 
+        const foodItemsListDiv = document.getElementById('foodItemsList'); 
         const analysisPlaceholder = document.getElementById('analysisPlaceholder');
+        const recipeStepsContainer = document.getElementById('recipeStepsContainer');
+        const recipeStepsP = recipeStepsContainer.querySelector('.recipe-steps');
+
+
         const errorMessage = document.getElementById('errorMessage');
         const logButton = document.getElementById('logButton');
         const loggedItemsContainer = document.getElementById('loggedItemsContainer');
@@ -144,7 +180,7 @@
         const photoCanvas = document.getElementById('photoCanvas');
         let stream = null;
 
-        let currentAnalysisData = [];
+        let currentAnalysisResult = null; 
         let loggedItems = [];
         let totalCalories = 0;
         let imageBase64 = null;
@@ -154,14 +190,22 @@
             previewPlaceholder.classList.remove('hidden');
             analyzeButton.disabled = true;
             imageBase64 = null;
-            analysisResult.innerHTML = ''; 
+            
+            const existingMealName = analysisResultMainContainer.querySelector('.meal-name-title');
+            if (existingMealName) existingMealName.remove();
+            foodItemsListDiv.innerHTML = ''; 
+            recipeStepsContainer.classList.add('hidden');
+            recipeStepsP.textContent = '';
             analysisPlaceholder.classList.remove('hidden'); 
-            if (!analysisResult.contains(analysisPlaceholder)) { 
-                 analysisResult.appendChild(analysisPlaceholder);
-                 analysisResult.querySelector('p').textContent = 'Analysis results will appear here.';
+            if (!foodItemsListDiv.contains(analysisPlaceholder)) { 
+                 foodItemsListDiv.appendChild(analysisPlaceholder);
+                 analysisPlaceholder.textContent = 'Analysis results will appear here.';
             }
+
             logButton.classList.add('hidden');
             errorMessage.classList.add('hidden');
+            currentAnalysisResult = null;
+
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
@@ -241,14 +285,18 @@
                 return;
             }
             loadingIndicator.classList.remove('hidden');
-            analysisResult.innerHTML = ''; 
+            const existingMealName = analysisResultMainContainer.querySelector('.meal-name-title');
+            if (existingMealName) existingMealName.remove();
+            foodItemsListDiv.innerHTML = ''; 
+            recipeStepsContainer.classList.add('hidden');
+            recipeStepsP.textContent = '';
             analysisPlaceholder.classList.add('hidden');
             errorMessage.classList.add('hidden');
             analyzeButton.disabled = true;
             logButton.classList.add('hidden');
 
             try {
-                const response = await fetch('/api/analyze-image', { // Calls your backend
+                const response = await fetch('/api/analyze-image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ imageBase64: imageBase64 }),
@@ -259,31 +307,25 @@
                     try {
                         const errorData = await response.json();
                         errorMsg = errorData.error || errorMsg;
-                    } catch (e) {
-                        errorMsg = response.statusText || errorMsg;
-                    }
+                    } catch (e) { /* If not JSON, use statusText */ }
                     throw new Error(errorMsg);
                 }
                 
-                const analysisDataJsonString = await response.text();
-                try {
-                    currentAnalysisData = JSON.parse(analysisDataJsonString);
-                } catch (parseError) {
-                     console.error("Client: JSON parsing error from server response:", parseError, "Raw text:", analysisDataJsonString);
-                     throw new Error("Received malformed analysis data from server. Please check server logs.");
-                }
+                currentAnalysisResult = await response.json(); 
 
-                if (currentAnalysisData && currentAnalysisData.length > 0) {
-                    displayAnalysis(currentAnalysisData);
-                    logButton.classList.remove('hidden');
+                if (currentAnalysisResult && currentAnalysisResult.foodItems) {
+                    displayAnalysis(currentAnalysisResult);
+                    if (currentAnalysisResult.foodItems.length > 0) {
+                        logButton.classList.remove('hidden');
+                    }
                 } else {
-                    analysisResult.innerHTML = '<p class="text-slate-400">AI could not identify specific food items or calories. Try a clearer image or a different meal.</p>';
+                    foodItemsListDiv.innerHTML = '<p class="text-slate-400">AI could not identify specific food items or calories. Try a clearer image or a different meal.</p>';
                 }
             } catch (error) {
                 console.error("Client: Analysis error:", error);
                 showError(`Analysis failed: ${error.message}`);
-                if (!analysisResult.querySelector('p')) { 
-                    analysisResult.innerHTML = `<p class="text-red-400">Could not analyze image. ${error.message}</p>`;
+                if (!foodItemsListDiv.querySelector('p')) { 
+                    foodItemsListDiv.innerHTML = `<p class="text-red-400">Could not analyze image. ${error.message}</p>`;
                 }
             } finally {
                 loadingIndicator.classList.add('hidden');
@@ -291,46 +333,72 @@
             }
         });
 
-        function displayAnalysis(data) {
-            analysisResult.innerHTML = ''; 
-            if (!data || data.length === 0) {
-                analysisPlaceholder.classList.remove('hidden');
-                 if (!analysisResult.contains(analysisPlaceholder)) {
-                    analysisResult.appendChild(analysisPlaceholder);
-                }
-                return;
-            }
+        function displayAnalysis(data) { 
+            const existingMealNameEl = analysisResultMainContainer.querySelector('.meal-name-title');
+            if (existingMealNameEl) existingMealNameEl.remove();
+            foodItemsListDiv.innerHTML = ''; 
+            recipeStepsContainer.classList.add('hidden');
+            recipeStepsP.textContent = '';
             analysisPlaceholder.classList.add('hidden');
-            data.forEach(item => {
-                const foodItemDiv = document.createElement('div');
-                foodItemDiv.className = 'food-item-card bg-slate-600 p-4 rounded-lg shadow flex justify-between items-center';
-                const itemName = document.createElement('span');
-                itemName.className = 'text-slate-100 font-medium';
-                itemName.textContent = item.foodItem || 'Unknown Item';
-                const itemCalories = document.createElement('span');
-                itemCalories.className = 'text-green-400 font-semibold';
-                itemCalories.textContent = `${item.estimatedCalories || 0} kcal`;
-                foodItemDiv.appendChild(itemName);
-                foodItemDiv.appendChild(itemCalories);
-                analysisResult.appendChild(foodItemDiv);
-            });
+
+            if (data.mealName) {
+                const mealNameEl = document.createElement('h3');
+                mealNameEl.className = 'meal-name-title'; 
+                mealNameEl.textContent = data.mealName;
+                analysisResultMainContainer.insertBefore(mealNameEl, foodItemsListDiv); 
+            }
+
+            if (!data.foodItems || data.foodItems.length === 0) {
+                analysisPlaceholder.classList.remove('hidden');
+                analysisPlaceholder.textContent = 'No specific food items identified.';
+                 if (!foodItemsListDiv.contains(analysisPlaceholder)) {
+                    foodItemsListDiv.appendChild(analysisPlaceholder);
+                }
+            } else {
+                data.foodItems.forEach(item => {
+                    const foodItemDiv = document.createElement('div');
+                    foodItemDiv.className = 'food-item-card bg-slate-600 p-4 rounded-lg shadow flex justify-between items-center';
+                    const itemName = document.createElement('span');
+                    itemName.className = 'text-slate-100 font-medium';
+                    itemName.textContent = item.foodItem || 'Unknown Item';
+                    const itemCalories = document.createElement('span');
+                    itemCalories.className = 'text-green-400 font-semibold';
+                    itemCalories.textContent = `${item.estimatedCalories || 0} kcal`;
+                    foodItemDiv.appendChild(itemName);
+                    foodItemDiv.appendChild(itemCalories);
+                    foodItemsListDiv.appendChild(foodItemDiv);
+                });
+            }
+
+            if (data.recipeSteps && data.recipeSteps !== "No recipe steps available for this combination.") {
+                recipeStepsP.textContent = data.recipeSteps;
+                recipeStepsContainer.classList.remove('hidden');
+            }
         }
 
         logButton.addEventListener('click', function() {
-            if (currentAnalysisData && currentAnalysisData.length > 0) {
-                currentAnalysisData.forEach(item => {
-                    loggedItems.push(item);
+            if (currentAnalysisResult && currentAnalysisResult.foodItems && currentAnalysisResult.foodItems.length > 0) {
+                currentAnalysisResult.foodItems.forEach(item => {
+                    loggedItems.push({ 
+                        foodItem: item.foodItem, 
+                        estimatedCalories: item.estimatedCalories 
+                    });
                     totalCalories += (item.estimatedCalories || 0);
                 });
                 updateLoggedItemsDisplay();
-                currentAnalysisData = []; 
+                currentAnalysisResult = null; 
                 logButton.classList.add('hidden');
-                analysisResult.innerHTML = ''; 
+                
+                const existingMealName = analysisResultMainContainer.querySelector('.meal-name-title');
+                if (existingMealName) existingMealName.remove();
+                foodItemsListDiv.innerHTML = ''; 
+                recipeStepsContainer.classList.add('hidden');
+                recipeStepsP.textContent = '';
                 analysisPlaceholder.classList.remove('hidden'); 
-                if (!analysisResult.contains(analysisPlaceholder)) {
-                    analysisResult.appendChild(analysisPlaceholder);
+                if (!foodItemsListDiv.contains(analysisPlaceholder)) {
+                    foodItemsListDiv.appendChild(analysisPlaceholder);
                 }
-                analysisResult.querySelector('p').textContent = 'Items logged! Provide a new image to analyze more food.';
+                analysisPlaceholder.textContent = 'Items logged! Provide a new image to analyze more food.';
             }
         });
 
@@ -366,14 +434,8 @@
         }
 
         updateLoggedItemsDisplay();
-        analysisPlaceholder.classList.remove('hidden');
-        logPlaceholder.classList.remove('hidden');
-        if (analysisResult && !analysisResult.contains(analysisPlaceholder)) {
-             analysisResult.appendChild(analysisPlaceholder);
-        }
-         if (loggedItemsContainer && !loggedItemsContainer.contains(logPlaceholder)) {
-             loggedItemsContainer.appendChild(logPlaceholder);
-        }
+        resetImageState(); 
+
     </script>
 </body>
 </html>
